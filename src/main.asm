@@ -5,6 +5,7 @@
 .eqv 	TILE_SIZE		256
 .eqv 	MAP_HEIGHT  	15
 .eqv	MAP_LENGTH		211
+.eqv 	END_POINT		198
 .eqv 	SCREEN_HEIGHT 	15
 .eqv 	SCREEN_LENGTH 	20
 .eqv 	FRAME_ADDRS 	0xFF200604
@@ -13,22 +14,21 @@
 .eqv	MARIO_LIM_R		160
 
 .include "../sprites/pixels/tiles.s"
-.include "../sprites/pixels/tiles2.s"
 .include "../sprites/pixels/marios.s"
-.include "../sprites/map/map_example.s"
 .include "../sprites/map/mapa.asm"
+.include "../sprites/pixels/historia1"
+.include "../sprites/pixels/historia2"
+.include "../sprites/pixels/historia3"
 
-# Só começa a contar que entrou em outra tile após ter passado os 16 pixeis verticais ou horizontais
+
 MAP_POS: .word 0
-FRAME:		.byte	1	#frame seguinte
+FRAME:	.byte	1	#frame seguinte
 
 # MARIO #####################################################################################################
 MARIO_UPGRADE: .byte 1 # upgrade atual do mario 1 = pqueno 2 = grande
-MARIO_STATE: .byte 0 # estado do mario = sprite, cycle
+MARIO_STATE: .byte 0 # estado do mario = sprite, 
 MARIO_POS: .word 160,192 # posicao relativa na tela
-MARIO_POS_TILE: .byte 0, 0
 MARIO_SPEED_UP: .byte 0
-
 
 # s11 = flag para renderizar o mapa
 
@@ -36,14 +36,72 @@ MARIO_SPEED_UP: .byte 0
 .text
 
 MAIN:
+	
+# INTRO_1:
+# 	la a0, HISTORIA_1
+# 	li a1,0
+# 	li a2,0
+# 	la t0,FRAME
+# 	lb a3,0(t0)
+# 	li a4,SCREEN_HEIGHT
+# 	li a5,SCREEN_LENGTH
+# 	jal RENDER
+
+# 	jal UPDATE_FRAME
+
+# 	INTRO_1_LOOP:
+# 		jal KEY_POLL
+# 		bnez a0, INTRO_2
+# 		j INTRO_1_LOOP
+
+# INTRO_2:
+
+# 	la a0, HISTORIA_2
+# 	li a1,0
+# 	li a2,0
+# 	la t0,FRAME
+# 	lb a3,0(t0)
+# 	li a4,SCREEN_HEIGHT
+# 	li a5,SCREEN_LENGTH
+# 	jal RENDER
+
+# 	jal UPDATE_FRAME
+
+# 	INTRO_2_LOOP:
+# 		jal KEY_POLL
+# 		bnez a0, INTRO_3
+# 		j INTRO_2_LOOP
+
+# INTRO_3:
+
+# 	la a0, HISTORIA_3
+# 	li a1,0
+# 	li a2,0
+# 	la t0,FRAME
+# 	lb a3,0(t0)
+# 	li a4,SCREEN_HEIGHT
+# 	li a5,SCREEN_LENGTH
+# 	jal RENDER
+
+# 	jal UPDATE_FRAME
+
+# 	INTRO_3_LOOP:
+# 		jal KEY_POLL
+# 		bnez a0, INTRO_END
+# 		j INTRO_3_LOOP
+
+# INTRO_END:
+
 	li s11,1
 	
 GAME_LOOP:	# loop principal do jogo
 	jal KEY_HANDLE	# funcao que trata input do teclado
-	beq s11,zero,MAP_SKIP1	# verifica se o mapa precisa ser atualizado
+	beqz s11,MAP_SKIP1	# verifica se o mapa precisa ser atualizado
 	jal MAP_RENDER
 MAP_SKIP1:
+	jal CLEAN_MARIO
 	jal MARIO_RENDER	# renderiza o mario
+	# jal UPDATE_FRAME
 	la t0, FRAME
 	lb t1,0(t0)
 	li t2, FRAME_ADDRS
@@ -51,13 +109,58 @@ MAP_SKIP1:
 	not t1,t1
 	andi t1,t1,1
 	sb t1,0(t0)	#Atualiza a variavel de frame
+
 	beq s11,zero,MAP_SKIP2
 	li s11,0
 	jal MAP_RENDER
+	jal VERIFY_COND
 MAP_SKIP2:
 	j GAME_LOOP
 
+GAME_END: 
+	li a7,10
+	ecall
+
+##########################################################
+# UPDATE FRAME
+##########################################################
+UPDATE_FRAME:
+	la t0, FRAME
+	lb t1,0(t0)
+	li t2, FRAME_ADDRS
+	sb t1, 0(t2)
+	not t1,t1
+	andi t1,t1,1
+	sb t1,0(t0)	#Atualiza a variavel de frame
+	ret
+
+##########################################################
+# VERIFY COND 
+##########################################################
+VERIFY_COND:
+	li t0, END_POINT
+	la t1, MARIO_POS
+	lw t1,0(t1)
+	li t2,TILE_LENGTH
+	div t1,t1,t2
+	la t2,MAP_POS
+	lw t2,0(t2)
+	add t1,t1,t2
+	beq t0,t1, VICTORY_COND
+
+	la t0, MARIO_UPGRADE
+	lb t0, 0(t0)
+	beqz t0, DEATH_COND
 	
+	ret
+
+	VICTORY_COND:
+		call GAME_END
+
+	DEATH_COND:
+		call GAME_END
+
+
 ##########################################################
 # MAP RENDER 
 ##########################################################
@@ -101,10 +204,6 @@ MAP_LOOP:
 	lw s1,8(sp)
 	addi sp,sp,8				# sp = sp+4
 	ret					# retorna
-		
-	
-	
-	
 	
 	
 ############################################################################################################################
@@ -154,6 +253,8 @@ MARIO_RENDER:
 	addi sp,sp,-4
 	sw ra,0(sp)
 
+	#TO DO - Limpar sombra
+
 	la t0, MARIO_STATE	# carrega o estado atual do mario e pega o endereco da imegem em a0 usando o TILE_SELECT
 	la a0, MARIOS
 	lb a1,0(t0)
@@ -174,11 +275,93 @@ MARIO_RENDER:
 	li a5,TILE_LENGTH
 
 	jal RENDER	# printa o mario
-	#TO DO - Limpar sombra
+	
 
 	lw ra,0(sp)
 	addi sp,sp,4
 	ret
+
+##########################################################
+# CLEAN_MARIO
+##########################################################
+CLEAN_MARIO:
+	addi sp,sp,-4
+	sw ra,0(sp)
+
+	la t0, MARIO_POS
+	li t1, TILE_LENGTH
+	lw a2,0(t0)
+	lw a3,4(t0)
+
+	div t3,a2,t1
+	la t0,MAP_POS
+	lw t0,0(t0)
+	add a0,t3,t0
+	div a1,a3,t1
+	jal CLEANER
+
+	blez t3, TILE_FRENTE
+
+	addi a0,a0,-1
+	addi a2,a2,-16
+
+	jal CLEANER
+
+	addi a0,a0,1
+	addi a2,a2,TILE_LENGTH
+
+TILE_FRENTE:
+	addi a0,a0,1
+	addi a2,a2,TILE_LENGTH
+
+	jal CLEANER
+
+	
+
+CLEAN_MARIO_END:
+	lw ra,0(sp)
+	addi sp,sp,4
+	ret
+############################################################################################################
+# CLEANER	args = a0(x mapa), a1(y mapa), a2(x tela), a3(y tela)
+############################################################################################################
+CLEANER:
+	addi sp,sp,-20
+	sw ra, 0(sp)
+	sw a0, 4(sp)
+	sw a1, 8(sp)
+	sw a2, 12(sp)
+	sw a3, 16(sp)
+
+	la a4,MAPA
+	li t0, MAP_LENGTH
+	mul t0,a1,t0
+	la t1, MAP_POS
+	add t0,t0,a0	# pega o tile selecionado
+	add t0,a4,t0	# bota em t0 o endereco do mapa somado ao numero de tiles deslocados
+	la a0,TILES 
+	lb	a1, 0(t0)
+	jal TILE_SELECT # a0 tem endereco da imagem
+
+	li t1,TILE_LENGTH
+	div a1, a2,t1
+	mul a1, a1,t1		# tira o resto da divisao por 16 para garantir que e a tile sera printada no lugar correto
+	mv a2,a3
+
+	la t0,FRAME
+	lb a3,0(t0)
+	li a4,TILE_HEIGHT
+	li a5,TILE_LENGTH
+	jal RENDER
+
+	lw ra, 0(sp)
+	lw a0, 4(sp)
+	lw a1, 8(sp)
+	lw a2, 12(sp)
+	lw a3, 16(sp)
+	addi sp,sp,20
+	ret
+
 
 ##########################################################
 # KEY HANDLING
@@ -205,8 +388,11 @@ KEY_HANDLE_A:
 	lw t1,0(t0)			# pega a posicao no eixo x
 	li t2, MARIO_LIM_L	
 	ble t1,t2,HANDLE_A_END	# verifica se chegou no limite do movimento
+
 	addi t1,t1,-4	
 	sw t1,0(t0)	#atualiza posicao movendo o mario para a esquerda se possivel
+
+	#jal CLEAN_MARIO
 	HANDLE_A_END:
 		j KEY_HANDLE_END
 
@@ -215,8 +401,11 @@ KEY_HANDLE_D:
 	lw t1,0(t0)			# pega a posicao no eixo x
 	li t2, MARIO_LIM_R
 	bgeu t1,t2,HANDLE_D_MAP	# verifica se chegou no limite do movimento
+
 	addi t1,t1,4	# se nao chegou soma 4 na posicao do mario
 	sw t1,0(t0)
+
+	#jal CLEAN_MARIO
 	j HANDLE_D_END
 
 	HANDLE_D_MAP:	# se esta no limite mexe a posicao atual do mapa
@@ -233,8 +422,7 @@ KEY_HANDLE_W:
 		j KEY_HANDLE_END
 
 KEY_HANDLE_ESC:
-	li a7, 10	# termina o programa se esc for apertado
-	ecall
+	call GAME_END
 
 
 KEY_HANDLE_END:
