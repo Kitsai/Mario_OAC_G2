@@ -114,7 +114,9 @@ MAP_SKIP2:
 	jal VERIFY_COND
 	j GAME_LOOP
 
-GAME_END: j GAME_END
+GAME_END: 
+	li a7,10
+	ecall
 		
 
 ##########################################################
@@ -183,7 +185,7 @@ VERIFY_COND_END:
 		j VERIFY_COND_END
 			
 	VICTORY_COND:
-		la t0, VICTORY_S
+		la t0, HISTORIA_1
 		li a1,0
 		li a2,0
 		la t0,FRAME
