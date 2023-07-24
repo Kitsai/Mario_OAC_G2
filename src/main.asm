@@ -20,6 +20,7 @@
 .include "../sprites/pixels/historia1.data"
 .include "../sprites/pixels/historia2.data"
 .include "../sprites/pixels/historia3.data"
+.include "../sprites/pixels/victory.data"
 .include "../sounds/music.s"
 
 
@@ -113,9 +114,8 @@ MAP_SKIP2:
 	jal VERIFY_COND
 	j GAME_LOOP
 
-GAME_END: 
-	li a7,10
-	ecall
+GAME_END: j GAME_END
+		
 
 ##########################################################
 # UPDATE FRAME
@@ -173,7 +173,7 @@ VERIFY_COND_END:
 			li s11, 1
 			la t0, MARIO_STATE
 			lb t1,0(t0)
-			addi t1,t1,7
+			li t1,7
 			sb t1,0(t0)
 			la t0,MARIO_POS
 			lw t1,4(t0)
@@ -183,6 +183,16 @@ VERIFY_COND_END:
 		j VERIFY_COND_END
 			
 	VICTORY_COND:
+		la t0, VICTORY_S
+		li a1,0
+		li a2,0
+		la t0,FRAME
+		lb a3,0(t0)
+		li a4,240
+		li a5,320
+		jal RENDER
+
+		jal UPDATE_FRAME
 
 		call GAME_END
 
@@ -201,7 +211,7 @@ CURRENT_TILE:
 	div a0,a0,t1
 	div a1,a1,t1
 
-	li t0, MAP_POS
+	la t0, MAP_POS
 	lw t1, 0(t0)
 	add a0,a0,t1
 
@@ -475,7 +485,7 @@ KEY_HANDLE:
 
 	jal KEY_POLL	# chama keypoll que vai retornar em a0 o status do teclado e em a1 a tecla pressionada caso tenha
 
-	beq a0,zero,KEY_HANDLE_VOID
+	beq a0,zero,KEY_HANDLE_END
 	li t0,'a'
 	beq a1,t0,KEY_HANDLE_A	# se a tecla for um `a` vai para o tratamento do a
 	li t0,'d'
@@ -497,6 +507,7 @@ KEY_HANDLE_A:
 
 	# jal CLEAN_MARIO
 	HANDLE_A_END:
+		jal WALKING_CYCLE
 		j KEY_HANDLE_END
 
 KEY_HANDLE_D:
@@ -518,6 +529,7 @@ KEY_HANDLE_D:
 		sw t1,0(t0)	# salva nova posicao do mapa
 		li s11,1
 	HANDLE_D_END:
+		jal WALKING_CYCLE
 		j KEY_HANDLE_END
 
 KEY_HANDLE_W:
@@ -530,13 +542,14 @@ KEY_HANDLE_ESC:
 KEY_HANDLE_VOID:
 	la t0,MARIO_UPGRADE
 	lb t0,0(t0)
-	li t1,7
+	li t1,2
 	la t2, MARIO_STATE
 	bge t0,t1,HANDLE_VOID_BIG
 		sb zero, 0(t2)
 		j KEY_HANDLE_END
 	HANDLE_VOID_BIG:
-		sb t1,	0(t2)
+		li t1,7
+		sb t1,0(t2)
 
 
 KEY_HANDLE_END:
@@ -549,25 +562,22 @@ KEY_HANDLE_END:
 ##########################################################
 # WALKING CYCLE
 ##########################################################
-# WALKING_CYCLE:
-# 	li t2,0
-
-# 	la t0, MARIO_UPGRADE
-# 	lb t0,0(t0)
-# 	li t1,2
-# 	bne t0,t2,CYCLE
-# 		addi t2,t2,7
-# CYCLE:
-# 	addi t3,t2,3
-# 	la t4, MARIO_STATE
-# 	lb t1,0(t4)
-# 	add t1,t1,t2
-# 	ble WALKING_CYCLE_END
-# 		addi t1,t1,-4	
-# WALKING_CYCLE_END:
-# 	addi t1,t1,1
-# 	sb t1,0(t4)
-# 	ret
+WALKING_CYCLE:
+	la t0,MARIO_UPGRADE
+	lb t0, 0(t0)
+	li t6,-3
+	mul t6,t6,t0
+	li t2,7
+	li t5,3
+	la t4, MARIO_STATE
+	lb t1,0(t4)
+	rem t3,t1,t2
+	blt t3, t5 WALKING_CYCLE_END
+		add t1,t1,t6
+WALKING_CYCLE_END:	
+	add t1,t1,t0
+	sb t1,0(t4)
+WC_RET:	ret
 
 
 ##########################################################
