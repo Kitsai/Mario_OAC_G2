@@ -5,20 +5,22 @@
 .eqv 	TILE_SIZE		256
 .eqv 	MAP_HEIGHT  	15
 .eqv	MAP_LENGTH		211
-.eqv 	END_POINT		198
+.eqv 	END_POINT		199
 .eqv 	SCREEN_HEIGHT 	15
 .eqv 	SCREEN_LENGTH 	20
 .eqv 	FRAME_ADDRS 	0xFF200604
 .eqv	GRAVITY			-10
 .eqv 	MARIO_LIM_L		0
 .eqv	MARIO_LIM_R		160
+.eqv 	NUM_NOTES		67
 
 .include "../sprites/pixels/tiles.s"
 .include "../sprites/pixels/marios.s"
 .include "../sprites/map/mapa.asm"
-.include "../sprites/pixels/historia1"
-.include "../sprites/pixels/historia2"
-.include "../sprites/pixels/historia3"
+.include "../sprites/pixels/historia1.data"
+.include "../sprites/pixels/historia2.data"
+.include "../sprites/pixels/historia3.data"
+.include "../sounds/music.s"
 
 
 MAP_POS: .word 0
@@ -30,6 +32,7 @@ MARIO_STATE: .byte 0 # estado do mario = sprite,
 MARIO_POS: .word 160,192 # posicao relativa na tela
 MARIO_SPEED_UP: .byte 0
 
+# s0 = contador de notas
 # s11 = flag para renderizar o mapa
 
 
@@ -37,84 +40,77 @@ MARIO_SPEED_UP: .byte 0
 
 MAIN:
 	
-# INTRO_1:
-# 	la a0, HISTORIA_1
-# 	li a1,0
-# 	li a2,0
-# 	la t0,FRAME
-# 	lb a3,0(t0)
-# 	li a4,SCREEN_HEIGHT
-# 	li a5,SCREEN_LENGTH
-# 	jal RENDER
+INTRO_1:
+	la a0, HISTORIA_1
+	li a1,0
+	li a2,0
+	la t0,FRAME
+	lb a3,0(t0)
+	li a4,240
+	li a5,320
+	jal RENDER
 
-# 	jal UPDATE_FRAME
+	jal UPDATE_FRAME
 
-# 	INTRO_1_LOOP:
-# 		jal KEY_POLL
-# 		bnez a0, INTRO_2
-# 		j INTRO_1_LOOP
+	INTRO_1_LOOP:
+		jal KEY_POLL
+		bnez a0, INTRO_2
+		j INTRO_1_LOOP
 
-# INTRO_2:
+INTRO_2:
 
-# 	la a0, HISTORIA_2
-# 	li a1,0
-# 	li a2,0
-# 	la t0,FRAME
-# 	lb a3,0(t0)
-# 	li a4,SCREEN_HEIGHT
-# 	li a5,SCREEN_LENGTH
-# 	jal RENDER
+	la a0, HISTORIA_2
+	li a1,0
+	li a2,0
+	la t0,FRAME
+	lb a3,0(t0)
+	li a4,240
+	li a5,320
+	jal RENDER
 
-# 	jal UPDATE_FRAME
+	jal UPDATE_FRAME
 
-# 	INTRO_2_LOOP:
-# 		jal KEY_POLL
-# 		bnez a0, INTRO_3
-# 		j INTRO_2_LOOP
+	INTRO_2_LOOP:
+		jal KEY_POLL
+		bnez a0, INTRO_3
+		j INTRO_2_LOOP
 
-# INTRO_3:
+INTRO_3:
 
-# 	la a0, HISTORIA_3
-# 	li a1,0
-# 	li a2,0
-# 	la t0,FRAME
-# 	lb a3,0(t0)
-# 	li a4,SCREEN_HEIGHT
-# 	li a5,SCREEN_LENGTH
-# 	jal RENDER
+	la a0, HISTORIA_3
+	li a1,0
+	li a2,0
+	la t0,FRAME
+	lb a3,0(t0)
+	li a4,240
+	li a5,320
+	jal RENDER
 
-# 	jal UPDATE_FRAME
+	jal UPDATE_FRAME
 
-# 	INTRO_3_LOOP:
-# 		jal KEY_POLL
-# 		bnez a0, INTRO_END
-# 		j INTRO_3_LOOP
+	INTRO_3_LOOP:
+		jal KEY_POLL
+		bnez a0, INTRO_END
+		j INTRO_3_LOOP
 
-# INTRO_END:
+INTRO_END:
 
 	li s11,1
 	
 GAME_LOOP:	# loop principal do jogo
+	# jal MUSIC
 	jal KEY_HANDLE	# funcao que trata input do teclado
 	beqz s11,MAP_SKIP1	# verifica se o mapa precisa ser atualizado
 	jal MAP_RENDER
 MAP_SKIP1:
 	jal CLEAN_MARIO
 	jal MARIO_RENDER	# renderiza o mario
-	# jal UPDATE_FRAME
-	la t0, FRAME
-	lb t1,0(t0)
-	li t2, FRAME_ADDRS
-	sb t1, 0(t2)
-	not t1,t1
-	andi t1,t1,1
-	sb t1,0(t0)	#Atualiza a variavel de frame
-
+	jal UPDATE_FRAME
 	beq s11,zero,MAP_SKIP2
 	li s11,0
 	jal MAP_RENDER
-	jal VERIFY_COND
 MAP_SKIP2:
+	jal VERIFY_COND
 	j GAME_LOOP
 
 GAME_END: 
@@ -138,6 +134,9 @@ UPDATE_FRAME:
 # VERIFY COND 
 ##########################################################
 VERIFY_COND:
+	addi sp,sp,-4
+	sw ra,0(sp)
+
 	li t0, END_POINT
 	la t1, MARIO_POS
 	lw t1,0(t1)
@@ -151,15 +150,100 @@ VERIFY_COND:
 	la t0, MARIO_UPGRADE
 	lb t0, 0(t0)
 	beqz t0, DEATH_COND
-	
+
+	jal CURRENT_TILE
+	lb t0, 0(a0)
+	li t1, 36
+	beq t0,t1, UPGRADE_GET
+
+VERIFY_COND_END:
+	lw ra,0(sp)
+	addi sp,sp,4
 	ret
 
+	UPGRADE_GET:
+		la t0, MARIO_UPGRADE
+		li t1,2
+		lb t2,0(t0)
+		beq t2,t1,VERIFY_COND_END
+			addi t2,t2,1
+			sb t2,0(t0)
+			li t0,1
+			sb t0,0(a0)
+			li s11, 1
+			la t0, MARIO_STATE
+			lb t1,0(t0)
+			addi t1,t1,7
+			sb t1,0(t0)
+			la t0,MARIO_POS
+			lw t1,4(t0)
+			addi t1,t1,-16
+			sw t1,4(t0)
+			
+		j VERIFY_COND_END
+			
 	VICTORY_COND:
+
 		call GAME_END
 
 	DEATH_COND:
 		call GAME_END
 
+
+##########################################################
+# CURRENT TILE ADDRS
+##########################################################
+CURRENT_TILE:
+	la t0 MARIO_POS
+	lw a0,0(t0)
+	lw a1,4(t0)
+	li t1, TILE_LENGTH
+	div a0,a0,t1
+	div a1,a1,t1
+
+	li t0, MAP_POS
+	lw t1, 0(t0)
+	add a0,a0,t1
+
+	li t1,MAP_LENGTH
+	mul a1,a1,t1
+
+	add a1, a1,a0
+
+	la a0, MAPA
+	add a0,a0,a1
+	ret
+
+##########################################################
+# MUSIC
+##########################################################
+MUSIC:
+	addi sp,sp,-4
+	sw ra,0(sp)	
+
+	li a2, 0
+	li a3,127
+	li a7,32
+	li t0, NUM_NOTES
+	blt s0,t0, NOTE
+		li a0,0
+	NOTE:
+		la t0, NOTES
+		li t1,8
+		mul t1,t1,s0
+		add t0,t0,t1
+		lw a0,0(t0)
+		lw a1,4(t0)
+		li a7, 31
+		ecall
+		mv a0,a1
+		li a4,32
+		ecall
+		addi s0,s0,1
+
+	lw sp,0(sp)
+	addi sp,sp,4
+	ret
 
 ##########################################################
 # MAP RENDER 
@@ -253,19 +337,16 @@ MARIO_RENDER:
 	addi sp,sp,-4
 	sw ra,0(sp)
 
-	#TO DO - Limpar sombra
-
 	la t0, MARIO_STATE	# carrega o estado atual do mario e pega o endereco da imegem em a0 usando o TILE_SELECT
 	la a0, MARIOS
 	lb a1,0(t0)
 	jal TILE_SELECT
+	la t0,MARIO_UPGRADE	#verifica o upgrade mas a principio n usa
+	lb t1,0(t0)
 
 	la t0, MARIO_POS # pega a posicao atual pra por no print
 	lw a1,0(t0)
 	lw a2,4(t0)
-
-	la t0,MARIO_UPGRADE	#verifica o upgrade mas a principio n usa
-	lb t1,0(t0)
 	
 	la t0,FRAME	# pega o proximo frame que sera o frame que vai ser printado
 	lb a3,0(t0)
@@ -299,8 +380,34 @@ CLEAN_MARIO:
 	add a0,t3,t0
 	div a1,a3,t1
 	jal CLEANER
+	blez a0, TILE_FRENTE1
 
-	blez t3, TILE_FRENTE
+	addi a0,a0,-1
+	addi a2,a2,-16
+
+	jal CLEANER
+	addi a0,a0,1
+	addi a2,a2,TILE_LENGTH
+
+TILE_FRENTE1:
+	addi a0,a0,1
+	addi a2,a2,TILE_LENGTH
+
+	jal CLEANER
+
+	la t3,MARIO_UPGRADE
+	lb t3,0(t3)
+	li t4,2
+	blt t3,t4, CLEAN_MARIO_END
+
+	addi a0,a0,-1
+	addi a1,a1,1
+	addi a2,a2,-16
+	addi a3,a3,16
+
+	jal CLEANER
+
+	blez a0, TILE_FRENTE2
 
 	addi a0,a0,-1
 	addi a2,a2,-16
@@ -309,14 +416,10 @@ CLEAN_MARIO:
 
 	addi a0,a0,1
 	addi a2,a2,TILE_LENGTH
-
-TILE_FRENTE:
+TILE_FRENTE2:
 	addi a0,a0,1
 	addi a2,a2,TILE_LENGTH
-
 	jal CLEANER
-
-	
 
 CLEAN_MARIO_END:
 	lw ra,0(sp)
@@ -372,7 +475,7 @@ KEY_HANDLE:
 
 	jal KEY_POLL	# chama keypoll que vai retornar em a0 o status do teclado e em a1 a tecla pressionada caso tenha
 
-	beq a0,zero,KEY_HANDLE_END
+	beq a0,zero,KEY_HANDLE_VOID
 	li t0,'a'
 	beq a1,t0,KEY_HANDLE_A	# se a tecla for um `a` vai para o tratamento do a
 	li t0,'d'
@@ -392,7 +495,7 @@ KEY_HANDLE_A:
 	addi t1,t1,-4	
 	sw t1,0(t0)	#atualiza posicao movendo o mario para a esquerda se possivel
 
-	#jal CLEAN_MARIO
+	# jal CLEAN_MARIO
 	HANDLE_A_END:
 		j KEY_HANDLE_END
 
@@ -405,7 +508,7 @@ KEY_HANDLE_D:
 	addi t1,t1,4	# se nao chegou soma 4 na posicao do mario
 	sw t1,0(t0)
 
-	#jal CLEAN_MARIO
+	# jal CLEAN_MARIO
 	j HANDLE_D_END
 
 	HANDLE_D_MAP:	# se esta no limite mexe a posicao atual do mapa
@@ -424,12 +527,49 @@ KEY_HANDLE_W:
 KEY_HANDLE_ESC:
 	call GAME_END
 
+KEY_HANDLE_VOID:
+	la t0,MARIO_UPGRADE
+	lb t0,0(t0)
+	li t1,7
+	la t2, MARIO_STATE
+	bge t0,t1,HANDLE_VOID_BIG
+		sb zero, 0(t2)
+		j KEY_HANDLE_END
+	HANDLE_VOID_BIG:
+		sb t1,	0(t2)
+
 
 KEY_HANDLE_END:
 	lw ra,0(sp)
 	addi sp,sp, 4
 	ret
+
+
 	
+##########################################################
+# WALKING CYCLE
+##########################################################
+# WALKING_CYCLE:
+# 	li t2,0
+
+# 	la t0, MARIO_UPGRADE
+# 	lb t0,0(t0)
+# 	li t1,2
+# 	bne t0,t2,CYCLE
+# 		addi t2,t2,7
+# CYCLE:
+# 	addi t3,t2,3
+# 	la t4, MARIO_STATE
+# 	lb t1,0(t4)
+# 	add t1,t1,t2
+# 	ble WALKING_CYCLE_END
+# 		addi t1,t1,-4	
+# WALKING_CYCLE_END:
+# 	addi t1,t1,1
+# 	sb t1,0(t4)
+# 	ret
+
+
 ##########################################################
 # KEY POLLING
 ##########################################################
